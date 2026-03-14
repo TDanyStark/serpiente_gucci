@@ -263,13 +263,25 @@
                     const img = getImgForSegment(i);
                     // Solo dibujamos si la imagen cargó correctamente
                     if (img.complete) {
+                        // Calculamos el ángulo de dirección hacia la cabeza para rotar la textura
+                        // igual que hace la cabeza, de modo que todos los círculos queden alineados
+                        let pointForward = getPointAtMath(segmentGlobalY + 8);
+                        let angle = Math.atan2(
+                            pointForward.y - point.y,
+                            pointForward.x - point.x
+                        );
+
+                        ctx.save();
+                        ctx.translate(point.x, screenY);
+                        ctx.rotate(angle + HEAD_SPRITE_ROTATION_OFFSET);
                         ctx.drawImage(
-                            img, 
-                            point.x - currentSegmentRadius, 
-                            screenY - currentSegmentRadius, 
-                            currentSegmentRadius * 2, 
+                            img,
+                            -currentSegmentRadius,
+                            -currentSegmentRadius,
+                            currentSegmentRadius * 2,
                             currentSegmentRadius * 2
                         );
+                        ctx.restore();
                     }
                 }
             }
