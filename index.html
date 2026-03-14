@@ -98,7 +98,7 @@
         const ctx = canvas.getContext('2d', { alpha: true });
         
         let w, h, cx, maxScroll, snakeLength, amp;
-        let segmentRadius, segmentGap, numSegments, headSize, tailMinScale, tailGapMinFactor, headBodyGap;
+        let segmentRadius, segmentGap, segmentDensity, numSegments, headSize, tailMinScale, tailGapMinFactor, headBodyGap;
         let dpr = window.devicePixelRatio || 1; 
         const HEAD_SPRITE_ROTATION_OFFSET = -Math.PI / 2;
 
@@ -167,6 +167,7 @@
             if (w < 768) {
                 segmentRadius = 15;
                 segmentGap = 6;
+                segmentDensity = 1.65;
                 amp = w * 0.40;
                 headSize = 78;
                 tailMinScale = 0.22;
@@ -174,13 +175,14 @@
             } else {
                 segmentRadius = 25;
                 segmentGap = 9;
+                segmentDensity = 1.55;
                 amp = w * 0.30;
                 headSize = 125;
                 tailMinScale = 0.2;
                 tailGapMinFactor = 0.38;
             }
             headBodyGap = Math.max(6, segmentRadius * 0.60);
-            numSegments = Math.floor(snakeLength / segmentGap);
+            numSegments = Math.floor(snakeLength / (segmentGap / segmentDensity));
         }
 
         // Función matemática para el movimiento en zigzag
@@ -202,8 +204,9 @@
 
         function getSegmentOffset(index) {
             const maxIndex = Math.max(numSegments - 1, 1);
+            const effectiveGap = segmentGap / segmentDensity;
             const compressedSteps = (index * (index + 1)) / (2 * maxIndex);
-            return segmentGap * (index - (1 - tailGapMinFactor) * compressedSteps);
+            return effectiveGap * (index - (1 - tailGapMinFactor) * compressedSteps);
         }
 
         function renderLoop() {
