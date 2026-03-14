@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gucci Snake - Realistic Textures</title>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&display=swap" rel="stylesheet">
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/ScrollTrigger.min.js"></script>
+    <script src="https://unpkg.com/@studio-freight/lenis@1.0.39/dist/lenis.min.js"></script>
+
+    <style>
+        :root {
+            --bg-color: #050505;
+            --text-color: #f4f4f4;
+        }
+
+        * {
+            box-sizing: border-box;
+            overscroll-behavior-y: none;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: 'Cinzel', serif;
+            overflow-x: hidden;
+        }
+
+        #snake-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            pointer-events: none;
+            z-index: 5;
+            will-change: transform;
+        }
+
+        section {
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        h2 {
+            font-size: clamp(2.5rem, 11vw, 9rem);
+            margin: 0;
+            text-transform: uppercase;
+            letter-spacing: 0.15em;
+            text-shadow: 0 15px 40px rgba(0, 0, 0, 0.9);
+            position: relative;
+        }
+
+        .text-over { z-index: 10; }
+        .text-under { z-index: 2; }
+
+        #loader {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: #050505;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            transition: opacity 0.5s;
+            color: white;
+            font-family: sans-serif;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="loader">
+        <p>CARGANDO TEXTURAS...</p>
+    </div>
+
+    <canvas id="snake-canvas"></canvas>
+
+    <!-- Secciones con alternancia de profundidad -->
+    <section><h2 class="text-under">HERITAGE</h2></section> 
+    <section><h2 class="text-over">PASSION</h2></section>  
+    <section><h2 class="text-under">CRAFT</h2></section>    
+    <section><h2 class="text-over">LEGACY</h2></section>   
+
+    <script>
+        const canvas = document.getElementById('snake-canvas');
+        const ctx = canvas.getContext('2d', { alpha: true });
+        
+        let w, h, cx, maxScroll, snakeLength, amp;
+        let segmentRadius, segmentGap, numSegments, headSize, tailMinScale, tailGapMinFactor, headBodyGap;
+        let dpr = window.devicePixelRatio || 1; 
+        const HEAD_SPRITE_ROTATION_OFFSET = -Math.PI / 2;
+
+        // --- MOTOR DE ASSETS ---
+        const assets = {
+            head: new Image(),
+            bodyRed: new Image(),
+            bodyBlack: new Image(),
+            bodyWhite: new Image()
+        };
+        
+        // ==========================================
+        // PEGA TUS ENLACES AQUÍ ABAJO:
+        // ==========================================
+        
+        assets.head.src = 'cabeza.png'; 
+        assets.bodyRed.src = 'textura.png';
+        
+        // Si aún no tienes las negras/blancas, puedes repetir la roja para probar:
+        assets.bodyBlack.src = 'textura.png'; 
+        assets.bodyWhite.src = 'textura.png'; 
+
+        // ==========================================
+
+        let loadedCount = 0;
+        const totalAssets = Object.keys(assets).length;
+
+        Object.values(assets).forEach(img => {
+            img.onload = () => {
+                loadedCount++;
+                if(loadedCount === totalAssets) {
+                    document.getElementById('loader').style.opacity = '0';
+                    setTimeout(() => document.getElementById('loader').remove(), 500);
+                }
+            };
+            img.onerror = () => {
+                console.error("Error cargando imagen:", img.src);
+                // Si falla, mostramos el contenido igual tras un tiempo
+                setTimeout(() => {
+                    if(document.getElementById('loader')) {
+                        document.getElementById('loader').remove();
+                    }
+                }, 3000);
+            }
+        });
+
+        // Configuración de Lenis para Scroll Suave
+        const lenis = new Lenis({
+            duration: 1.2,
+            easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t))
+        });
+
+        lenis.on('scroll', ScrollTrigger.update);
+        gsap.ticker.lagSmoothing(0);
+
+        function resize() {
+            w = window.innerWidth;
+            h = window.innerHeight;
+            cx = w / 2;
+            canvas.width = w * dpr;
+            canvas.height = h * dpr;
+            ctx.scale(dpr, dpr);
+            maxScroll = document.body.scrollHeight - h;
+            snakeLength = h * 0.8; 
+            
+            if (w < 768) {
+                segmentRadius = 15;
+                segmentGap = 6;
+                amp = w * 0.40;
+                headSize = 78;
+                tailMinScale = 0.22;
+                tailGapMinFactor = 0.4;
+            } else {
+                segmentRadius = 25;
+                segmentGap = 9;
+                amp = w * 0.30;
+                headSize = 125;
+                tailMinScale = 0.2;
+                tailGapMinFactor = 0.38;
+            }
+            headBodyGap = Math.max(6, segmentRadius * 0.60);
+            numSegments = Math.floor(snakeLength / segmentGap);
+        }
+
+        // Función matemática para el movimiento en zigzag
+        function getPointAtMath(yGlobal) {
+            const x = cx + Math.sin((yGlobal - h * 0.5) / h * Math.PI) * amp;
+            return { x: x, y: yGlobal };
+        }
+
+        // Determina qué imagen usar según el patrón
+        function getImgForSegment(index) {
+            // Si solo tienes rojas, este selector siempre devolverá 'bodyRed'
+            // si pegaste el mismo link en las 3 variables de arriba.
+            let cycle = index % 20; 
+            if (cycle < 12) return assets.bodyRed;
+            if (cycle < 15) return assets.bodyBlack;
+            if (cycle < 18) return assets.bodyWhite;
+            return assets.bodyBlack;
+        }
+
+        function getSegmentOffset(index) {
+            const maxIndex = Math.max(numSegments - 1, 1);
+            const compressedSteps = (index * (index + 1)) / (2 * maxIndex);
+            return segmentGap * (index - (1 - tailGapMinFactor) * compressedSteps);
+        }
+
+        function renderLoop() {
+            ctx.clearRect(0, 0, w, h);
+            
+            // Usamos el scroll de Lenis para máxima fluidez Apple-style
+            let currentScrollY = lenis.scroll !== undefined ? lenis.scroll : window.scrollY;
+            let scrollProgress = currentScrollY / maxScroll;
+            if(isNaN(scrollProgress)) scrollProgress = 0;
+            
+            let headGlobalY = -h * 0.2 + scrollProgress * (maxScroll + h + snakeLength);
+
+            // 1. DIBUJAR CABEZA (debajo del cuerpo)
+            let headPos = getPointAtMath(headGlobalY);
+            let neckPos = getPointAtMath(headGlobalY - 5);
+            let headScreenX = headPos.x;
+            let headScreenY = headPos.y - currentScrollY;
+
+            if (headScreenY > -150 && headScreenY < h + 150) {
+                let angle = Math.atan2(headPos.y - neckPos.y, headPos.x - neckPos.x);
+                ctx.save();
+                ctx.translate(headScreenX, headScreenY);
+                // Ajuste: tu sprite base mira hacia abajo, no hacia la derecha.
+                ctx.rotate(angle + HEAD_SPRITE_ROTATION_OFFSET);
+                
+                // Sombra realista bajo la cabeza
+                ctx.shadowColor = "rgba(0,0,0,0.7)";
+                ctx.shadowBlur = 25;
+                ctx.shadowOffsetY = 15;
+
+                if (assets.head.complete) {
+                    const ar = assets.head.naturalWidth / assets.head.naturalHeight;
+                    const drawW = ar >= 1 ? headSize : headSize * ar;
+                    const drawH = ar >= 1 ? headSize / ar : headSize;
+                    ctx.drawImage(
+                        assets.head, 
+                        -drawW / 2, 
+                        -drawH / 2, 
+                        drawW, 
+                        drawH
+                    );
+                }
+                ctx.restore();
+            }
+
+            // 2. DIBUJAR CUERPO (Capa por capa para evitar huecos)
+            for (let i = numSegments - 1; i >= 0; i--) {
+                let tailProgress = i / Math.max(numSegments - 1, 1);
+                let segmentScale = 1 - tailProgress * (1 - tailMinScale);
+                let currentSegmentRadius = segmentRadius * segmentScale;
+                let segmentOffset = getSegmentOffset(i);
+                let segmentGlobalY = headGlobalY - (segmentOffset + headBodyGap);
+                let point = getPointAtMath(segmentGlobalY);
+                let screenY = point.y - currentScrollY;
+                
+                if (screenY > -150 && screenY < h + 150) {
+                    const img = getImgForSegment(i);
+                    // Solo dibujamos si la imagen cargó correctamente
+                    if (img.complete) {
+                        ctx.drawImage(
+                            img, 
+                            point.x - currentSegmentRadius, 
+                            screenY - currentSegmentRadius, 
+                            currentSegmentRadius * 2, 
+                            currentSegmentRadius * 2
+                        );
+                    }
+                }
+            }
+        }
+
+        // Sincronización del motor de renderizado
+        gsap.ticker.add((time) => { 
+            lenis.raf(time * 1000); 
+            renderLoop();
+        });
+
+        // Animación de los títulos (GSAP)
+        gsap.registerPlugin(ScrollTrigger);
+        gsap.utils.toArray("h2").forEach((title) => {
+            gsap.from(title, {
+                y: 100, 
+                opacity: 0, 
+                duration: 1.2, 
+                ease: "power3.out",
+                scrollTrigger: {
+                    trigger: title, 
+                    start: "top 90%", 
+                    toggleActions: "play none none reverse"
+                }
+            });
+        });
+
+        window.addEventListener('resize', resize);
+        resize();
+    </script>
+</body>
+</html>
